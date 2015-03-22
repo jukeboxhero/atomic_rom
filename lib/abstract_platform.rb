@@ -1,7 +1,7 @@
 class AbstractPlatform
 	attr_reader :id, :name, :alias, :controller, :overview, :developer, 
 				:manufacturer, :cpu, :memory, :sound, :display, :media, 
-				:maxcontrollers, :local_path, :games
+				:maxcontrollers, :local_path, :games, :local_games
 
 
 	def initialize(platform)
@@ -13,6 +13,7 @@ class AbstractPlatform
 			instance_variable_set("@#{k}", v)
 		end
 		@name = output.delete("Platform")
+		@local_games = self.class.const_get("LocalGamesList").new
 	end
 
 	def populate_games!
@@ -26,6 +27,7 @@ class AbstractPlatform
 	end
 
 	def local_game_data
+		return @local_games unless @local_games.empty?
 		self.populate_games!
 
 		Dir["#{self.local_path}/*"].each do |file|
@@ -34,10 +36,19 @@ class AbstractPlatform
 			tags = game_name.scan(/\(([^\)]+)\)/)
 			game_alias = game_name.gsub(/\(([^\)]+)\)/, '').strip.downcase
 			game_obj = @games.select{|x| x.name.downcase == game_alias}.first
+			output = nil
+			if game_obj
+				response = Net::HTTP.get(URI.parse("http://thegamesdb.net/api/GetGame.php?id=#{game_obj.id}"))
+				output = Crack::XML.parse(response)['Data']['Game']
+			else
+				response = Net::HTTP.get(URI.parse("http://thegamesdb.net/api/GetGame.php?id=#{game_obj.name.downcase}"))
+				output = Crack::XML.parse(response)['Data']['Game'].first
+			end
 			
-			response = Net::HTTP.get(URI.parse("http://thegamesdb.net/api/GetGame.php?id=#{game_obj.id}"))
-			output = Crack::XML.parse(response)['Data']['Game']
-			p self.class.const_get("Game").new(output)
+			output.merge!(:local_path => file)
+			@local_games << self.class.const_get("Game").new(output)
 		end
+
+		@local_games
 	end
 end

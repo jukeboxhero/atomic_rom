@@ -3,6 +3,7 @@
 require 'crack'
 require 'net/http'
 
+
 Dir["./lib/*.rb"].each {|file| require file }
 
 result = Net::HTTP.get(URI.parse('http://thegamesdb.net/api/GetPlatformsList.php'))
@@ -31,11 +32,15 @@ output.each do |platform|
 				end
 			end
 
+			gameslist = Class.new(GamesList)
+
 			self.const_set 'Game', subklass
+			self.const_set 'LocalGamesList', gameslist
 		end
 
 		Object.const_set class_name, klass
-		klass.new(platform).local_game_data
+		local_games = klass.new(platform).local_game_data
+		local_games.process_games!
 
 	rescue NameError => e
 		p e
